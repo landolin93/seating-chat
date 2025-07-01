@@ -282,8 +282,13 @@
                         table: row["Table"]
                     };
                 });
+                // Set up search functionality immediately
+                const searchInput = document.getElementById('searchInput');
+                searchInput.addEventListener('input', (e) => {
+                    updateResults(e.target.value, guestsData);
+                });
                 preloadImages(guestsData); // Preload table images
-                await loadMainImages(); // Load and preload main seating images
+                loadMainImages(); // Start image loading in the background
                 return guestsData;
             } catch (error) {
                 console.error('Error loading CSV:', error);
@@ -381,11 +386,7 @@
         }
 
         // Load guests and set up search
-        loadGuests().then(guests => {
-            searchInput.addEventListener('input', (e) => {
-                updateResults(e.target.value, guests);
-            });
-        });
+        loadGuests();
 
         // Clear button functionality
         clearButton.addEventListener('click', () => {
