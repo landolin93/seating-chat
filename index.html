@@ -356,7 +356,7 @@
                 imageContainer.classList.remove('hidden');
                 startOrResumeRotation(); // Resume rotation from last index
             } else {
-                imageContainer.classList.add('hidden');
+                imageContainer.classList.add('hidden'); // Hide immediately on text input
                 stopImageRotation(); // Stop rotation when text is entered
             }
             if (query.length === 0) {
@@ -396,6 +396,8 @@
             searchInput.addEventListener('input', (e) => {
                 updateResults(e.target.value, guests);
             });
+            // Ensure background loading continues
+            loadMainImages(); // Called here to start preloading
         });
 
         // Clear button functionality
