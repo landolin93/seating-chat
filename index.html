@@ -173,7 +173,7 @@
         async function loadMainImages() {
             const container = document.getElementById('searchImageContainer');
             let i = 1;
-            let firstImageLoaded = false;
+            let imagesLoaded = 0;
             while (i <= 10) { // Reasonable limit, adjust if needed
                 const pngUrl = `images/home/${i}.png`;
                 const jpgUrl = `images/home/${i}.jpg`;
@@ -194,7 +194,7 @@
                 console.log(`Loading image: ${src}`);
                 const img = document.createElement('img');
                 img.src = src;
-                img.className = 'search-image' + (i === 1 ? ' active' : '');
+                img.className = 'search-image' + (imagesLoaded === 0 ? ' active' : '');
                 img.alt = `Main seating chart ${i}`;
                 img.onerror = function() {
                     console.error(`Failed to load image after confirmation: ${this.src}`);
@@ -202,18 +202,21 @@
                 };
                 img.onload = function() {
                     console.log(`Successfully loaded image: ${this.src}`);
-                    if (!firstImageLoaded) {
-                        firstImageLoaded = true;
-                        // Trigger immediate first rotation
+                    imagesLoaded++;
+                    if (imagesLoaded === 1) {
+                        // Trigger rotation as soon as the first image loads
                         const images = container.querySelectorAll('.search-image');
                         if (images.length > 1) {
                             rotateImages(images, 0); // Start with index 0
+                        } else {
+                            console.log(`Only ${images.length} image loaded, rotation not started`);
                         }
                     }
                 };
                 container.appendChild(img);
                 i++;
             }
+            console.log(`Total images loaded: ${imagesLoaded}`);
         }
 
         // Function to rotate images
@@ -236,14 +239,14 @@
             }, 3000);
         }
 
-        // Function to start image rotation
+        // Function to start image rotation (now redundant but kept for consistency)
         function startImageRotation() {
             const images = document.querySelectorAll('.search-image');
             if (images.length === 0) {
                 console.log('No images available to rotate');
                 return;
             }
-            // Rotation starts immediately via loadMainImages' onload
+            // Rotation starts in loadMainImages' onload
         }
 
         // Function to stop image rotation
