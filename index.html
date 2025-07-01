@@ -75,14 +75,14 @@
             position: relative;
             width: 280px; /* Match result pills width */
             margin: 8px auto 0; /* Center with spacing below input */
-            height: 200px; /* Fixed height for images */
+            /* No fixed height */
         }
         .search-image {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
+            max-width: 280px; /* Ensure width matches pills */
             object-fit: contain; /* Scale to fit, preserve aspect ratio */
             opacity: 0;
             transition: opacity 0.5s ease-in-out;
@@ -92,12 +92,12 @@
             opacity: 1;
             z-index: 2; /* Ensure active image is on top */
         }
-        .search-image-container input:not(:placeholder-shown) ~ .search-image {
-            display: none; /* Hide all images when text is present */
+        .search-image-container.hidden {
+            display: none; /* Hide container when text is present */
         }
         .clear-button {
             position: absolute;
-            right: 16px; /* Updated position */
+            right: 16px;
             top: 13px; /* Updated position */
             line-height: 1; /* Prevent line-height offset */
             color: #8cabc0;
@@ -317,14 +317,21 @@
         const searchInput = document.getElementById('searchInput');
         const resultsList = document.getElementById('results');
         const clearButton = document.querySelector('.clear-button');
+        const imageContainer = document.getElementById('searchImageContainer');
 
         function updateResults(query, guests) {
             resultsList.innerHTML = '';
+            // Hide or show images based on input
             if (query.length === 0) {
+                imageContainer.classList.remove('hidden');
                 startImageRotation(); // Resume rotation when input is cleared
+            } else {
+                imageContainer.classList.add('hidden');
+                stopImageRotation(); // Stop rotation when text is entered
+            }
+            if (query.length === 0) {
                 return; // Don't show any results if input is empty
             }
-            stopImageRotation(); // Stop rotation when text is entered
             const filteredGuests = guests.filter(guest =>
                 guest.fullName.toLowerCase().includes(query.toLowerCase())
             );
