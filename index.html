@@ -11,7 +11,6 @@
         body {
             font-family: 'Abel', sans-serif;
             font-weight: 800;
-            background-color: #8cabc0;
         }
         body.modal-open {
             overflow: hidden;
@@ -36,9 +35,12 @@
             max-width: 80%;
             max-height: 80%;
             min-width: 300px;
+            min-height: 200px;
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
+            position: relative;
             overflow: hidden;
         }
         .modal-card img {
@@ -50,6 +52,7 @@
             color: #d9e5f9;
             font-size: 1.25rem;
             font-weight: 800;
+            text-align: center;
         }
         .name-card {
             background-color: #d9e5f9;
@@ -110,7 +113,8 @@
         .clear-button {
             position: absolute;
             right: 16px;
-            top: 12px;
+            top: 13px;
+            line-height: 1;
             color: #8cabc0;
             font-size: 1rem;
             font-weight: 800;
@@ -122,7 +126,7 @@
         }
     </style>
 </head>
-<body>
+<body style="background-color: #8cabc0;">
     <div class="container mx-auto px-4 py-12">
         <h1 class="text-4xl font-extrabold text-center mb-8" style="color: #d9e5f9;">Please Find Your Seat</h1>
         <div class="max-w-lg mx-auto">
@@ -144,7 +148,11 @@
 
     <script>
         let guestsData = [];
-        let rotationInterval = null;
+        let currentTable = null;
+        let isImageView = true;
+        let currentNameIndex = 0;
+        let imageRotationInterval = null;
+        let lastRotationIndex = 0;
 
         async function imageExists(url) {
             try {
@@ -157,7 +165,6 @@
 
         async function loadMainImages() {
             const container = document.getElementById('searchImageContainer');
-            const loadedImages = [];
             const maxImages = 10;
             const imagePromises = [];
 
@@ -173,6 +180,7 @@
             const imageResults = (await Promise.all(imagePromises)).filter(result => result);
             imageResults.sort((a, b) => a.index - b.index);
 
+            const loadedImages = [];
             for (const result of imageResults) {
                 const img = await new Promise((resolve) => {
                     const image = new Image();
@@ -191,31 +199,35 @@
             if (loadedImages.length > 0 && !document.getElementById('searchInput').value) {
                 container.classList.add('visible');
                 if (loadedImages.length > 1) {
-                    startRotation();
+                    startOrResumeRotation();
                 }
             }
         }
 
-        function startRotation() {
-            stopRotation();
+        function startOrResumeRotation() {
+            stopImageRotation();
             const images = Array.from(document.querySelectorAll('.search-image'));
             if (images.length <= 1) return;
-            let currentIndex = 0;
-            rotationInterval = setInterval(() => {
-                if (document.getElementById('searchInput').value) {
-                    stopRotation();
-                    return;
-                }
-                images.forEach((img, index) => img.classList.toggle('active', index === currentIndex));
-                currentIndex = (currentIndex + 1) % images.length;
+            rotateImages(images, lastRotationIndex);
+        }
+
+        function rotateImages(images, currentIndex) {
+            const input = document.getElementById('searchInput');
+            if (input.value.length > 0) return;
+            images.forEach((img, index) => {
+                img.classList.toggle('active', index === currentIndex);
+            });
+            lastRotationIndex = (currentIndex + 1) % images.length;
+            imageRotationInterval = setTimeout(() => {
+                rotateImages(images, lastRotationIndex);
             }, 3000);
         }
 
-        function stopRotation() {
-            if (rotationInterval) {
-                clearInterval(rotationInterval);
-                rotationInterval = null;
-.            }
+        function stopImageRotation() {
+            if (imageRotationInterval) {
+                clearTimeout(imageRotationInterval);
+                imageRotationInterval = null;
+            }
         }
 
         async function loadGuests() {
@@ -234,7 +246,8 @@
                 }));
                 loadMainImages();
                 return guestsData;
-            } catch {
+            } catch (error) {
+                console.error('Error loading CSV:', error);
                 document.getElementById('results').innerHTML = `
                     <div class="px-4 py-1.5 text-[#8cabc0] font-extrabold text-base flex items-center justify-center"
                          style="background-color: #d9e5f9; white-space: nowrap; width: 280px; height: 32px;">
@@ -244,23 +257,24 @@
             }
         }
 
-        function showModal(tableNumber) {
+        function showModal(tableNumber, view = 'image') {
+            currentTable = tableNumber;
+            isImageView = view === 'image';
+            currentNameIndex = 0;
             const modal = document.getElementById('modal');
             const tableGuests = guestsData
                 .filter(guest => guest.table === tableNumber)
                 .map(guest => guest.fullName);
-            
-            let currentIndex = 0;
-            let touchStartX = 0;
 
             const modalContent = `
                 <div class="modal-card">
                     <div class="loading">Loading image...</div>
                     <img src="images/tables/Table ${tableNumber}.png" alt="Table ${tableNumber} layout"
                          onload="this.previousElementSibling.remove()"
-                         onerror="this.previousElementSibling.textContent='Failed to load image'">
+                         onerror="this.previousElementSibling.textContent='Failed to load image'; console.error('Failed to load image: images/tables/Table ${tableNumber}.png')"
+                         class="${isImageView ? 'active' : ''}">
                     ${tableGuests.map((name, index) => `
-                        <div class="name-card ${index === 0 ? 'active' : ''}">
+                        <div class="name-card ${view === 'guests' && index === 0 ? 'active' : ''}">
                             <h3>Table ${tableNumber}</h3>
                             <div class="name">${name}</div>
                         </div>
@@ -274,13 +288,7 @@
             const modalCard = modal.querySelector('.modal-card');
             if (!modalCard) return;
 
-            function updateNameDisplay() {
-                const cards = modalCard.querySelectorAll('.name-card');
-                cards.forEach((card, index) => {
-                    card.classList.toggle('active', index === currentIndex);
-                });
-            }
-
+            let touchStartX = 0;
             modalCard.addEventListener('touchstart', e => {
                 touchStartX = e.touches[0].clientX;
             });
@@ -288,20 +296,42 @@
             modalCard.addEventListener('touchend', e => {
                 const touchEndX = e.changedTouches[0].clientX;
                 const deltaX = touchEndX - touchStartX;
-                if (deltaX > 50 && currentIndex > 0) {
-                    currentIndex--;
-                    updateNameDisplay();
-                } else if (deltaX < -50 && currentIndex < tableGuests.length - 1) {
-                    currentIndex++;
-                    updateNameDisplay();
+                if (Math.abs(deltaX) > 50) {
+                    if (isImageView) {
+                        if (tableGuests.length > 0) {
+                            showModal(tableNumber, 'guests');
+                        }
+                    } else {
+                        if (deltaX > 50 && currentNameIndex > 0) {
+                            currentNameIndex--;
+                            updateNameDisplay();
+                        } else if (deltaX < -50 && currentNameIndex < tableGuests.length - 1) {
+                            currentNameIndex++;
+                            updateNameDisplay();
+                        } else if (deltaX < -50 && currentNameIndex === tableGuests.length - 1) {
+                            showModal(tableNumber, 'image');
+                        } else if (deltaX > 50 && currentNameIndex === 0) {
+                            showModal(tableNumber, 'image');
+                        }
+                    }
                 }
             });
+
+            function updateNameDisplay() {
+                const cards = modalCard.querySelectorAll('.name-card');
+                cards.forEach((card, index) => {
+                    card.classList.toggle('active', index === currentNameIndex);
+                });
+            }
         }
 
         function closeModal() {
             const modal = document.getElementById('modal');
             modal.classList.add('hidden');
             modal.innerHTML = '';
+            currentTable = null;
+            isImageView = true;
+            currentNameIndex = 0;
             document.body.classList.remove('modal-open');
         }
 
@@ -309,22 +339,21 @@
             const resultsList = document.getElementById('results');
             const imageContainer = document.getElementById('searchImageContainer');
             resultsList.innerHTML = '';
-            
-            if (!query) {
+
+            if (query.length === 0) {
                 imageContainer.classList.add('visible');
-                startRotation();
-                resultsList.innerHTML = '';
+                startOrResumeRotation();
                 return;
             }
 
             imageContainer.classList.remove('visible');
-            stopRotation();
+            stopImageRotation();
 
             const filteredGuests = guests.filter(guest =>
                 guest.fullName.toLowerCase().includes(query.toLowerCase())
             );
 
-            if (!filteredGuests.length) {
+            if (filteredGuests.length === 0) {
                 resultsList.innerHTML = `
                     <div class="px-4 py-1.5 text-[#8cabc0] font-extrabold text-base flex items-center justify-center"
                          style="background-color: #d9e5f9; white-space: nowrap; width: 280px; height: 32px;">
