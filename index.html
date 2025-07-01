@@ -173,6 +173,7 @@
         async function loadMainImages() {
             const container = document.getElementById('searchImageContainer');
             let i = 1;
+            let firstImageLoaded = false;
             while (i <= 10) { // Reasonable limit, adjust if needed
                 const pngUrl = `images/home/${i}.png`;
                 const jpgUrl = `images/home/${i}.jpg`;
@@ -201,41 +202,54 @@
                 };
                 img.onload = function() {
                     console.log(`Successfully loaded image: ${this.src}`);
+                    if (!firstImageLoaded) {
+                        firstImageLoaded = true;
+                        // Trigger immediate first rotation
+                        const images = container.querySelectorAll('.search-image');
+                        if (images.length > 1) {
+                            rotateImages(images, 0); // Start with index 0
+                        }
+                    }
                 };
                 container.appendChild(img);
                 i++;
             }
         }
 
-        // Function to rotate images every 3 seconds
+        // Function to rotate images
+        function rotateImages(images, currentIndex) {
+            const input = document.getElementById('searchInput');
+            if (input.value.length > 0) return; // Pause rotation if input has text
+            images.forEach((img, index) => {
+                if (img.style.display !== 'none') { // Only consider visible images
+                    img.classList.toggle('active', index === currentIndex);
+                }
+            });
+            let nextIndex = (currentIndex + 1) % images.length;
+            // Skip hidden images
+            while (images[nextIndex] && images[nextIndex].style.display === 'none') {
+                nextIndex = (nextIndex + 1) % images.length;
+            }
+            // Schedule next rotation
+            imageRotationInterval = setTimeout(() => {
+                rotateImages(images, nextIndex);
+            }, 3000);
+        }
+
+        // Function to start image rotation
         function startImageRotation() {
             const images = document.querySelectorAll('.search-image');
             if (images.length === 0) {
                 console.log('No images available to rotate');
                 return;
             }
-            let currentIndex = 0;
-
-            imageRotationInterval = setInterval(() => {
-                const input = document.getElementById('searchInput');
-                if (input.value.length > 0) return; // Pause rotation if input has text
-                images.forEach((img, index) => {
-                    if (img.style.display !== 'none') { // Only consider visible images
-                        img.classList.toggle('active', index === currentIndex);
-                    }
-                });
-                currentIndex = (currentIndex + 1) % images.length;
-                // Skip hidden images
-                while (images[currentIndex] && images[currentIndex].style.display === 'none') {
-                    currentIndex = (currentIndex + 1) % images.length;
-                }
-            }, 3000);
+            // Rotation starts immediately via loadMainImages' onload
         }
 
         // Function to stop image rotation
         function stopImageRotation() {
             if (imageRotationInterval) {
-                clearInterval(imageRotationInterval);
+                clearTimeout(imageRotationInterval);
                 imageRotationInterval = null;
             }
         }
@@ -264,7 +278,6 @@
                 });
                 preloadImages(guestsData); // Preload images after loading guests
                 await loadMainImages(); // Load main seating images
-                startImageRotation(); // Start image rotation after loading
                 return guestsData;
             } catch (error) {
                 console.error('Error loading CSV:', error);
