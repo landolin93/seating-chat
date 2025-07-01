@@ -109,6 +109,20 @@
         .search-container input:not(:placeholder-shown) + .clear-button {
             display: block; /* Show when input has text */
         }
+        .loading-bar-container {
+            width: 280px;
+            margin: 4px auto;
+            background-color: #d9e5f9;
+            border-radius: 4px;
+            overflow: hidden;
+            display: none; /* Hidden by default */
+        }
+        .loading-bar {
+            height: 8px;
+            background-color: #4a90e2; /* Blue fill */
+            width: 0%;
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 <body style="background-color: #8cabc0;">
@@ -125,6 +139,9 @@
                 >
                 <span class="clear-button">×</span>
                 <div class="search-image-container" id="searchImageContainer"></div>
+                <div class="loading-bar-container" id="loadingBarContainer">
+                    <div class="loading-bar" id="loadingBar"></div>
+                </div>
             </div>
             <div id="results" class="flex flex-wrap gap-3 justify-center"></div>
         </div>
@@ -137,6 +154,7 @@
         let isImageView = true; // Track current view (image or guest list)
         let imageRotationInterval = null;
         let lastRotationIndex = 0; // Track the last rotation index
+        let totalImages = 10; // Maximum number of images to load
 
         // Function to preload images for all table numbers and main seating images
         function preloadImages(guests) {
@@ -162,9 +180,11 @@
         // Function to load main seating images dynamically with preloading
         async function loadMainImages() {
             const container = document.getElementById('searchImageContainer');
+            const loadingBarContainer = document.getElementById('loadingBarContainer');
+            const loadingBar = document.getElementById('loadingBar');
             let firstImage = null;
             const imagePromises = [];
-            for (let i = 1; i <= 10; i++) { // Reasonable limit, adjust if needed
+            for (let i = 1; i <= totalImages; i++) { // Reasonable limit, adjust if needed
                 const pngUrl = `images/home/${i}.png`;
                 const jpgUrl = `images/home/${i}.jpg`;
                 const promise = (async () => {
@@ -183,12 +203,15 @@
                         const img = new Image();
                         img.src = src;
                         img.alt = `Main seating chart ${i}`;
+                        img.dataset.index = i; // Store original index for ordered rotation
                         img.onload = () => {
                             console.log(`Successfully preloaded image: ${src}`);
+                            updateLoadingBar();
                             resolve(img);
                         };
                         img.onerror = () => {
                             console.error(`Failed to load image after confirmation: ${src}`);
+                            updateLoadingBar();
                             resolve(null); // Resolve with null for failed images
                         };
                     });
@@ -204,7 +227,12 @@
                         firstImage.src = pngExists ? pngUrl : jpgUrl;
                         firstImage.className = 'search-image active';
                         firstImage.alt = `Main seating chart 1`;
-                        firstImage.onload = () => console.log(`First image loaded: ${firstImage.src}`);
+                        firstImage.dataset.index = 1; // Store original index
+                        firstImage.onload = () => {
+                            console.log(`First image loaded: ${firstImage.src}`);
+                            loadingBarContainer.style.display = 'block'; // Show loading bar
+                            updateLoadingBar();
+                        };
                         firstImage.onerror = () => console.error(`Failed to load first image: ${firstImage.src}`);
                         container.appendChild(firstImage);
                     }
@@ -216,6 +244,7 @@
 
             if (loadedImages.length === 0 && !firstImage) {
                 console.log('No images available to rotate');
+                loadingBarContainer.style.display = 'none'; // Hide if no images
                 return;
             }
 
@@ -228,13 +257,22 @@
             });
 
             // Start rotation only after all images are preloaded
-            if (loadedImages.length > 0) {
-                const allImages = Array.from(container.querySelectorAll('.search-image'));
+            if (loadedImages.length > 0 || firstImage) {
+                const allImages = Array.from(container.querySelectorAll('.search-image')).sort((a, b) => a.dataset.index - b.dataset.index); // Sort by original index
+                loadingBarContainer.style.display = 'none'; // Hide loading bar when done
                 rotateImages(allImages, 0);
             }
         }
 
-        // Function to rotate images
+        // Function to update loading bar progress
+        function updateLoadingBar() {
+            const loadingBar = document.getElementById('loadingBar');
+            const loadedImages = document.querySelectorAll('.search-image').length;
+            const progress = (loadedImages / totalImages) * 100;
+            loadingBar.style.width = `${progress}%`;
+        }
+
+        // Function to rotate images in order
         function rotateImages(images, currentIndex) {
             const input = document.getElementById('searchInput');
             if (input.value.length > 0) return; // Pause rotation if input has text
@@ -257,7 +295,8 @@
                 return;
             }
             if (images.length > 1) {
-                rotateImages(Array.from(images), lastRotationIndex); // Resume from last index
+                const sortedImages = Array.from(images).sort((a, b) => a.dataset.index - b.dataset.index); // Sort by original index
+                rotateImages(sortedImages, lastRotationIndex); // Resume from last index
             } else {
                 console.log(`Only ${images.length} image loaded, rotation not started`);
             }
