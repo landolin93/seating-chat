@@ -51,39 +51,33 @@
             font-size: 1.25rem;
             font-weight: 800;
         }
-        .table-card {
+        .name-card {
             background-color: #d9e5f9;
             color: #8cabc0;
             width: 100%;
             max-width: 280px;
             padding: 10px;
-            margin-top: 10px;
             border-radius: 8px;
             text-align: center;
-            overflow: hidden;
-            position: relative;
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
             touch-action: pan-x;
         }
-        .table-card h3 {
+        .name-card.active {
+            opacity: 1;
+        }
+        .name-card h3 {
             font-size: 1.25rem;
             font-weight: 800;
             margin-bottom: 8px;
         }
-        .table-card .name-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 40px;
-            overflow: hidden;
-        }
-        .table-card .name {
-            position: absolute;
-            width: 100%;
-            opacity: 0;
-            transition: opacity 0.3s ease-in-out;
-        }
-        .table-card .name.active {
-            opacity: 1;
+        .name-card .name {
+            font-size: 1rem;
+            font-weight: 800;
         }
         .search-container {
             position: relative;
@@ -164,55 +158,41 @@
         async function loadMainImages() {
             const container = document.getElementById('searchImageContainer');
             const loadedImages = [];
-
-            const loadFirstImage = async () => {
-                const src = (await imageExists('images/home/1.png')) ? 'images/home/1.png' : 
-                            (await imageExists('images/home/1.jpg')) ? 'images/home/1.jpg' : null;
-                if (!src) return null;
-                return new Promise((resolve) => {
-                    const img = new Image();
-                    img.src = src;
-                    img.alt = 'Main seating chart 1';
-                    img.className = 'search-image active';
-                    img.onload = () => {
-                        container.appendChild(img);
-                        if (!document.getElementById('searchInput').value) {
-                            container.classList.add('visible');
-                        }
-                        resolve(img);
-                    };
-                    img.onerror = () => resolve(null);
-                });
-            };
-
-            const firstImage = await loadFirstImage();
-            if (firstImage) loadedImages.push(firstImage);
-
+            const maxImages = 10;
             const imagePromises = [];
-            for (let i = 2; i <= 10; i++) {
+
+            for (let i = 1; i <= maxImages; i++) {
                 imagePromises.push((async () => {
-                    const src = (await imageExists(`images/home/${i}.png`)) ? `images/home/${i}.png` : 
+                    const src = (await imageExists(`images/home/${i}.png`)) ? `images/home/${i}.png` :
                                 (await imageExists(`images/home/${i}.jpg`)) ? `images/home/${i}.jpg` : null;
                     if (!src) return null;
-                    return new Promise((resolve) => {
-                        const img = new Image();
-                        img.src = src;
-                        img.alt = `Main seating chart ${i}`;
-                        img.className = 'search-image';
-                        img.onload = () => {
-                            container.appendChild(img);
-                            resolve(img);
-                        };
-                        img.onerror = () => resolve(null);
-                    });
+                    return { index: i, src };
                 })());
             }
 
-            const remainingImages = (await Promise.all(imagePromises)).filter(img => img);
-            loadedImages.push(...remainingImages);
+            const imageResults = (await Promise.all(imagePromises)).filter(result => result);
+            imageResults.sort((a, b) => a.index - b.index);
 
-            if (loadedImages.length > 1 && !document.getElementById('searchInput').value) {
-                startRotation();
+            for (const result of imageResults) {
+                const img = await new Promise((resolve) => {
+                    const image = new Image();
+                    image.src = result.src;
+                    image.alt = `Main seating chart ${result.index}`;
+                    image.className = `search-image ${loadedImages.length === 0 ? 'active' : ''}`;
+                    image.onload = () => {
+                        container.appendChild(image);
+                        resolve(image);
+                    };
+                    image.onerror = () => resolve(null);
+                });
+                if (img) loadedImages.push(img);
+            }
+
+            if (loadedImages.length > 0 && !document.getElementById('searchInput').value) {
+                container.classList.add('visible');
+                if (loadedImages.length > 1) {
+                    startRotation();
+                }
             }
         }
 
@@ -235,7 +215,7 @@
             if (rotationInterval) {
                 clearInterval(rotationInterval);
                 rotationInterval = null;
-            }
+.            }
         }
 
         async function loadGuests() {
@@ -279,35 +259,33 @@
                     <img src="images/tables/Table ${tableNumber}.png" alt="Table ${tableNumber} layout"
                          onload="this.previousElementSibling.remove()"
                          onerror="this.previousElementSibling.textContent='Failed to load image'">
-                    <div class="table-card">
-                        <h3>Table ${tableNumber}</h3>
-                        <div class="name-container">
-                            ${tableGuests.map((name, index) => `
-                                <div class="name ${index === 0 ? 'active' : ''}">${name}</div>
-                            `).join('')}
+                    ${tableGuests.map((name, index) => `
+                        <div class="name-card ${index === 0 ? 'active' : ''}">
+                            <h3>Table ${tableNumber}</h3>
+                            <div class="name">${name}</div>
                         </div>
-                    </div>
+                    `).join('')}
                 </div>
             `;
             modal.innerHTML = modalContent;
             modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
 
-            const nameContainer = modal.querySelector('.name-container');
-            if (!nameContainer) return;
+            const modalCard = modal.querySelector('.modal-card');
+            if (!modalCard) return;
 
             function updateNameDisplay() {
-                const names = nameContainer.querySelectorAll('.name');
-                names.forEach((name, index) => {
-                    name.classList.toggle('active', index === currentIndex);
+                const cards = modalCard.querySelectorAll('.name-card');
+                cards.forEach((card, index) => {
+                    card.classList.toggle('active', index === currentIndex);
                 });
             }
 
-            nameContainer.addEventListener('touchstart', e => {
+            modalCard.addEventListener('touchstart', e => {
                 touchStartX = e.touches[0].clientX;
             });
 
-            nameContainer.addEventListener('touchend', e => {
+            modalCard.addEventListener('touchend', e => {
                 const touchEndX = e.changedTouches[0].clientX;
                 const deltaX = touchEndX - touchStartX;
                 if (deltaX > 50 && currentIndex > 0) {
