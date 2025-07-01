@@ -149,44 +149,73 @@
             });
             // Preload main seating images
             let i = 1;
-            while (true) {
+            while (i <= 10) { // Reasonable limit, adjust if needed
                 const imgPng = new Image();
                 const imgJpg = new Image();
                 imgPng.src = `images/home/${i}.png`;
                 imgJpg.src = `images/home/${i}.jpg`;
-                imgPng.onerror = () => console.error(`Failed to preload image: images/home/${i}.png`);
-                imgJpg.onerror = () => console.error(`Failed to preload image: images/home/${i}.jpg`);
-                if (i > 100) break; // Safety limit to prevent infinite loop
+                imgPng.onerror = () => console.log(`Preload: No image at images/home/${i}.png`);
+                imgJpg.onerror = () => console.log(`Preload: No image at images/home/${i}.jpg`);
                 i++;
             }
         }
 
+        // Function to check if an image exists
+        async function imageExists(url) {
+            try {
+                const response = await fetch(url, { method: 'HEAD' });
+                return response.ok;
+            } catch (error) {
+                console.log(`Image check failed for ${url}: ${error.message}`);
+                return false;
+            }
+        }
+
         // Function to load main seating images dynamically
-        function loadMainImages() {
+        async function loadMainImages() {
             const container = document.getElementById('searchImageContainer');
             let i = 1;
-            while (true) {
+            while (i <= 10) { // Reasonable limit, adjust if needed
+                const pngUrl = `images/home/${i}.png`;
+                const jpgUrl = `images/home/${i}.jpg`;
+                let src = '';
+                const [pngExists, jpgExists] = await Promise.all([
+                    imageExists(pngUrl),
+                    imageExists(jpgUrl)
+                ]);
+                if (pngExists) {
+                    src = pngUrl;
+                } else if (jpgExists) {
+                    src = jpgUrl;
+                } else {
+                    console.log(`No image found for index ${i}: ${pngUrl} or ${jpgUrl}`);
+                    i++;
+                    continue;
+                }
+                console.log(`Loading image: ${src}`);
                 const img = document.createElement('img');
-                img.src = `images/home/${i}.png`;
+                img.src = src;
                 img.className = 'search-image' + (i === 1 ? ' active' : '');
                 img.alt = `Main seating chart ${i}`;
                 img.onerror = function() {
-                    this.src = `images/home/${i}.jpg`; // Try .jpg if .png fails
-                    this.onerror = () => {
-                        this.style.display = 'none'; // Hide if both fail
-                        console.error(`Failed to load image: images/home/${i}.png and images/home/${i}.jpg`);
-                    };
+                    console.error(`Failed to load image after confirmation: ${this.src}`);
+                    this.style.display = 'none'; // Hide if image fails to load
+                };
+                img.onload = function() {
+                    console.log(`Successfully loaded image: ${this.src}`);
                 };
                 container.appendChild(img);
                 i++;
-                if (i > 10) break; // Reasonable limit, adjust if needed
             }
         }
 
         // Function to rotate images every 3 seconds
         function startImageRotation() {
             const images = document.querySelectorAll('.search-image');
-            if (images.length === 0) return; // No images to rotate
+            if (images.length === 0) {
+                console.log('No images available to rotate');
+                return;
+            }
             let currentIndex = 0;
 
             imageRotationInterval = setInterval(() => {
@@ -236,7 +265,7 @@
                     };
                 });
                 preloadImages(guestsData); // Preload images after loading guests
-                loadMainImages(); // Load main seating images
+                await loadMainImages(); // Load main seating images
                 startImageRotation(); // Start image rotation after loading
                 return guestsData;
             } catch (error) {
