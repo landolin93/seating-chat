@@ -99,8 +99,8 @@
         }
         .clear-button {
             position: absolute;
-            right: 12px;
-            top: 10px; /* 10px from top of pill */
+            right: 16px;
+            top: 13px; /* 10px from top of pill */
             line-height: 1; /* Prevent line-height offset */
             color: #8cabc0;
             font-size: 1rem; /* 16px to match input text size */
