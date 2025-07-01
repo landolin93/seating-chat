@@ -136,6 +136,7 @@
         let currentTable = null;
         let isImageView = true; // Track current view (image or guest list)
         let imageRotationInterval = null;
+        let lastRotationIndex = 0; // Track the last rotation index
 
         // Function to preload images for all table numbers and main seating images
         function preloadImages(guests) {
@@ -233,20 +234,25 @@
             while (images[nextIndex] && images[nextIndex].style.display === 'none') {
                 nextIndex = (nextIndex + 1) % images.length;
             }
+            lastRotationIndex = nextIndex; // Update last rotation index
             // Schedule next rotation
             imageRotationInterval = setTimeout(() => {
                 rotateImages(images, nextIndex);
             }, 3000);
         }
 
-        // Function to start image rotation (now redundant but kept for consistency)
-        function startImageRotation() {
+        // Function to start or resume image rotation
+        function startOrResumeRotation() {
             const images = document.querySelectorAll('.search-image');
             if (images.length === 0) {
                 console.log('No images available to rotate');
                 return;
             }
-            // Rotation starts in loadMainImages' onload
+            if (images.length > 1) {
+                rotateImages(images, lastRotationIndex); // Resume from last index
+            } else {
+                console.log(`Only ${images.length} image loaded, rotation not started`);
+            }
         }
 
         // Function to stop image rotation
@@ -340,7 +346,7 @@
             // Hide or show images based on input
             if (query.length === 0) {
                 imageContainer.classList.remove('hidden');
-                startImageRotation(); // Resume rotation when input is cleared
+                startOrResumeRotation(); // Resume rotation from last index
             } else {
                 imageContainer.classList.add('hidden');
                 stopImageRotation(); // Stop rotation when text is entered
