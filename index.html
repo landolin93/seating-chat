@@ -10,10 +10,7 @@
     <style>
         body {
             font-family: 'Abel', sans-serif;
-            font-weight: 800;
-        }
-        body.modal-open {
-            overflow: hidden;
+            font-weight: 800; /* Extra bold font for entire page */
         }
         .modal-overlay {
             position: fixed;
@@ -34,53 +31,41 @@
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
             max-width: 80%;
             max-height: 80%;
-            min-width: 300px;
+            min-width: 300px; /* Ensure minimum size */
             min-height: 200px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            position: relative;
-            overflow: hidden;
+            justify-content: center; /* Center content */
         }
         .modal-card img {
             max-width: 100%;
-            max-height: 60%;
+            max-height: 100%;
             object-fit: contain;
         }
         .modal-card .loading {
             color: #d9e5f9;
-            font-size: 1.25rem;
+            font-size: 1.25rem; /* 20px */
             font-weight: 800;
             text-align: center;
         }
-        .name-card {
-            background-color: #d9e5f9;
-            color: #8cabc0;
-            width: 100%;
-            max-width: 280px;
-            padding: 10px;
-            border-radius: 8px;
+        .modal-card h2 {
+            color: #d9e5f9;
+            font-size: 1.5rem; /* 24px */
+            font-weight: 800;
+            margin-bottom: 16px;
             text-align: center;
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            right: 20px;
-            opacity: 0;
-            transition: opacity 0.3s ease-in-out;
-            touch-action: pan-x;
         }
-        .name-card.active {
-            opacity: 1;
+        .guest-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 60vh;
+            overflow-y: auto;
+            width: 280px;
         }
-        .name-card h3 {
-            font-size: 1.25rem;
-            font-weight: 800;
-            margin-bottom: 8px;
-        }
-        .name-card .name {
-            font-size: 1rem;
-            font-weight: 800;
+        body.modal-open {
+            overflow: hidden; /* Lock scrolling when modal is open */
         }
         .search-container {
             position: relative;
@@ -88,41 +73,41 @@
         }
         .search-image-container {
             position: relative;
-            width: 280px;
-            margin: 8px auto 0;
-            display: none;
-        }
-        .search-image-container.visible {
-            display: block;
+            width: 280px; /* Match result pills width */
+            margin: 8px auto 0; /* Center with spacing below input */
+            /* No fixed height */
         }
         .search-image {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            max-width: 280px;
-            object-fit: contain;
+            max-width: 280px; /* Ensure width matches pills */
+            object-fit: contain; /* Scale to fit, preserve aspect ratio */
             opacity: 0;
             transition: opacity 0.5s ease-in-out;
             z-index: 1;
         }
         .search-image.active {
             opacity: 1;
-            z-index: 2;
+            z-index: 2; /* Ensure active image is on top */
+        }
+        .search-image-container.hidden {
+            display: none; /* Hide container when text is present */
         }
         .clear-button {
             position: absolute;
             right: 16px;
-            top: 13px;
-            line-height: 1;
+            top: 13px; /* Updated position */
+            line-height: 1; /* Prevent line-height offset */
             color: #8cabc0;
-            font-size: 1rem;
+            font-size: 1rem; /* 16px to match input text size */
             font-weight: 800;
             cursor: pointer;
-            display: none;
+            display: none; /* Hidden by default */
         }
         .search-container input:not(:placeholder-shown) + .clear-button {
-            display: block;
+            display: block; /* Show when input has text */
         }
     </style>
 </head>
@@ -147,82 +132,138 @@
     <div id="modal" class="modal-overlay hidden"></div>
 
     <script>
-        let guestsData = [];
+        let guestsData = []; // Store guest data globally
         let currentTable = null;
-        let isImageView = true;
-        let currentNameIndex = 0;
+        let isImageView = true; // Track current view (image or guest list)
         let imageRotationInterval = null;
-        let lastRotationIndex = 0;
+        let lastRotationIndex = 0; // Track the last rotation index
 
+        // Function to preload images for all table numbers and main seating images
+        function preloadImages(guests) {
+            const tableNumbers = [...new Set(guests.map(guest => guest.table))];
+            tableNumbers.forEach(table => {
+                const img = new Image();
+                img.src = `images/tables/Table ${table}.png`;
+                img.onerror = () => console.log(`Preload: No image at images/tables/Table ${table}.png`);
+            });
+        }
+
+        // Function to check if an image exists
         async function imageExists(url) {
             try {
                 const response = await fetch(url, { method: 'HEAD' });
                 return response.ok;
-            } catch {
+            } catch (error) {
+                console.log(`Image check failed for ${url}: ${error.message}`);
                 return false;
             }
         }
 
+        // Function to load main seating images dynamically with preloading
         async function loadMainImages() {
             const container = document.getElementById('searchImageContainer');
-            const maxImages = 10;
+            let firstImage = null;
             const imagePromises = [];
-
-            for (let i = 1; i <= maxImages; i++) {
-                imagePromises.push((async () => {
-                    const src = (await imageExists(`images/home/${i}.png`)) ? `images/home/${i}.png` :
-                                (await imageExists(`images/home/${i}.jpg`)) ? `images/home/${i}.jpg` : null;
-                    if (!src) return null;
-                    return { index: i, src };
-                })());
-            }
-
-            const imageResults = (await Promise.all(imagePromises)).filter(result => result);
-            imageResults.sort((a, b) => a.index - b.index);
-
-            const loadedImages = [];
-            for (const result of imageResults) {
-                const img = await new Promise((resolve) => {
-                    const image = new Image();
-                    image.src = result.src;
-                    image.alt = `Main seating chart ${result.index}`;
-                    image.className = `search-image ${loadedImages.length === 0 ? 'active' : ''}`;
-                    image.onload = () => {
-                        container.appendChild(image);
-                        resolve(image);
-                    };
-                    image.onerror = () => resolve(null);
-                });
-                if (img) loadedImages.push(img);
-            }
-
-            if (loadedImages.length > 0 && !document.getElementById('searchInput').value) {
-                container.classList.add('visible');
-                if (loadedImages.length > 1) {
-                    startOrResumeRotation();
+            for (let i = 1; i <= 10; i++) { // Reasonable limit, adjust if needed
+                const pngUrl = `images/home/${i}.png`;
+                const jpgUrl = `images/home/${i}.jpg`;
+                const promise = (async () => {
+                    const [pngExists, jpgExists] = await Promise.all([
+                        imageExists(pngUrl),
+                        imageExists(jpgUrl)
+                    ]);
+                    let src = '';
+                    if (pngExists) src = pngUrl;
+                    else if (jpgExists) src = jpgUrl;
+                    else {
+                        console.log(`No image found for index ${i}: ${pngUrl} or ${jpgUrl}`);
+                        return null;
+                    }
+                    return new Promise((resolve) => {
+                        const img = new Image();
+                        img.src = src;
+                        img.alt = `Main seating chart ${i}`;
+                        img.onload = () => {
+                            console.log(`Successfully preloaded image: ${src}`);
+                            resolve(img);
+                        };
+                        img.onerror = () => {
+                            console.error(`Failed to load image after confirmation: ${src}`);
+                            resolve(null); // Resolve with null for failed images
+                        };
+                    });
+                })();
+                imagePromises.push(promise);
+                if (i === 1 && !firstImage) { // Check for first image
+                    const [pngExists, jpgExists] = await Promise.all([
+                        imageExists(pngUrl),
+                        imageExists(jpgUrl)
+                    ]);
+                    if (pngExists || jpgExists) {
+                        firstImage = new Image();
+                        firstImage.src = pngExists ? pngUrl : jpgUrl;
+                        firstImage.className = 'search-image active';
+                        firstImage.alt = `Main seating chart 1`;
+                        firstImage.onload = () => console.log(`First image loaded: ${firstImage.src}`);
+                        firstImage.onerror = () => console.error(`Failed to load first image: ${firstImage.src}`);
+                        container.appendChild(firstImage);
+                    }
                 }
             }
+
+            const loadedImages = (await Promise.all(imagePromises)).filter(img => img !== null);
+            console.log(`Total images preloaded: ${loadedImages.length}`);
+
+            if (loadedImages.length === 0 && !firstImage) {
+                console.log('No images available to rotate');
+                return;
+            }
+
+            // Append remaining preloaded images (skip the first if already added)
+            loadedImages.forEach((img, index) => {
+                if (index > 0 || !firstImage) { // Skip first if already added
+                    img.className = 'search-image';
+                    container.appendChild(img);
+                }
+            });
+
+            // Start rotation only after all images are preloaded
+            if (loadedImages.length > 0) {
+                const allImages = Array.from(container.querySelectorAll('.search-image'));
+                rotateImages(allImages, 0);
+            }
         }
 
-        function startOrResumeRotation() {
-            stopImageRotation();
-            const images = Array.from(document.querySelectorAll('.search-image'));
-            if (images.length <= 1) return;
-            rotateImages(images, lastRotationIndex);
-        }
-
+        // Function to rotate images
         function rotateImages(images, currentIndex) {
             const input = document.getElementById('searchInput');
-            if (input.value.length > 0) return;
+            if (input.value.length > 0) return; // Pause rotation if input has text
             images.forEach((img, index) => {
                 img.classList.toggle('active', index === currentIndex);
             });
-            lastRotationIndex = (currentIndex + 1) % images.length;
+            let nextIndex = (currentIndex + 1) % images.length;
+            lastRotationIndex = nextIndex; // Update last rotation index
+            // Schedule next rotation
             imageRotationInterval = setTimeout(() => {
-                rotateImages(images, lastRotationIndex);
+                rotateImages(images, nextIndex);
             }, 3000);
         }
 
+        // Function to start or resume image rotation
+        function startOrResumeRotation() {
+            const images = document.querySelectorAll('.search-image');
+            if (images.length === 0) {
+                console.log('No images available to rotate');
+                return;
+            }
+            if (images.length > 1) {
+                rotateImages(Array.from(images), lastRotationIndex); // Resume from last index
+            } else {
+                console.log(`Only ${images.length} image loaded, rotation not started`);
+            }
+        }
+
+        // Function to stop image rotation
         function stopImageRotation() {
             if (imageRotationInterval) {
                 clearTimeout(imageRotationInterval);
@@ -230,135 +271,110 @@
             }
         }
 
+        // Function to load and parse the CSV file
         async function loadGuests() {
             try {
                 const response = await fetch('seating-chart.csv');
-                if (!response.ok) throw new Error('CSV load failed');
+                if (!response.ok) {
+                    throw new Error(`Failed to load CSV file: ${response.status} ${response.statusText}`);
+                }
                 const csvText = await response.text();
                 guestsData = Papa.parse(csvText, {
                     header: true,
                     skipEmptyLines: true,
-                    transform: (value) => value.trim().replace(/^"|"$/g, '')
-                }).data.map(row => ({
-                    fullName: `${row["First Name"] || ""} ${row["Last Name"] || ""}`.trim(),
-                    display: `${row["First Name"] || ""} ${row["Last Name"] || ""} | Table ${row["Table"]}`,
-                    table: row["Table"]
-                }));
-                loadMainImages();
+                    transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
+                }).data.map(row => {
+                    const firstName = row["First Name"] || "";
+                    const lastName = row["Last Name"] || "";
+                    const fullName = `${firstName} ${lastName}`.trim();
+                    return {
+                        fullName,
+                        display: `${fullName} | Table ${row["Table"]}`,
+                        table: row["Table"]
+                    };
+                });
+                preloadImages(guestsData); // Preload table images
+                await loadMainImages(); // Load and preload main seating images
                 return guestsData;
             } catch (error) {
                 console.error('Error loading CSV:', error);
-                document.getElementById('results').innerHTML = `
-                    <div class="px-4 py-1.5 text-[#8cabc0] font-extrabold text-base flex items-center justify-center"
-                         style="background-color: #d9e5f9; white-space: nowrap; width: 280px; height: 32px;">
-                        Unable to load guest list
-                    </div>`;
+                const resultsList = document.getElementById('results');
+                resultsList.innerHTML = '<div class="px-4 py-1.5 text-[#8cabc0] font-extrabold text-base flex items-center justify-center" style="background-color: #d9e5f9; white-space: nowrap; width: 280px; height: 32px;">Unable to load guest list. Please check if the seating chart file is available or contact the organizer.</div>';
                 return [];
             }
         }
 
+        // Function to show the modal with the table image or guest list
         function showModal(tableNumber, view = 'image') {
             currentTable = tableNumber;
             isImageView = view === 'image';
-            currentNameIndex = 0;
             const modal = document.getElementById('modal');
-            const tableGuests = guestsData
-                .filter(guest => guest.table === tableNumber)
-                .map(guest => guest.fullName);
-
-            const modalContent = `
+            modal.classList.add('hidden'); // Reset modal state
+            modal.innerHTML = ''; // Clear previous content
+            modal.innerHTML = isImageView ? `
                 <div class="modal-card">
                     <div class="loading">Loading image...</div>
-                    <img src="images/tables/Table ${tableNumber}.png" alt="Table ${tableNumber} layout"
-                         onload="this.previousElementSibling.remove()"
-                         onerror="this.previousElementSibling.textContent='Failed to load image'; console.error('Failed to load image: images/tables/Table ${tableNumber}.png')"
-                         class="${isImageView ? 'active' : ''}">
-                    ${tableGuests.map((name, index) => `
-                        <div class="name-card ${view === 'guests' && index === 0 ? 'active' : ''}">
-                            <h3>Table ${tableNumber}</h3>
-                            <div class="name">${name}</div>
-                        </div>
-                    `).join('')}
+                    <img src="images/tables/Table ${tableNumber}.png" alt="Table ${tableNumber} layout" onload="this.previousElementSibling.remove()" onerror="this.previousElementSibling.textContent='Failed to load image'; console.error('Failed to load image: images/tables/Table ${tableNumber}.png')">
+                </div>
+            ` : `
+                <div class="modal-card">
+                    <h2>Table ${tableNumber}</h2>
+                    <div class="guest-list">
+                        ${guestsData.filter(guest => guest.table === tableNumber)
+                            .map(guest => `
+                                <div class="px-4 py-1.5 rounded-full shadow-sm text-[#8cabc0] text-xl font-extrabold flex items-center justify-center" style="background-color: #d9e5f9; white-space: nowrap; width: 280px; height: 32px;">
+                                    ${guest.fullName}
+                                </div>
+                            `).join('')}
+                    </div>
                 </div>
             `;
-            modal.innerHTML = modalContent;
             modal.classList.remove('hidden');
-            document.body.classList.add('modal-open');
-
-            const modalCard = modal.querySelector('.modal-card');
-            if (!modalCard) return;
-
-            let touchStartX = 0;
-            modalCard.addEventListener('touchstart', e => {
-                touchStartX = e.touches[0].clientX;
-            });
-
-            modalCard.addEventListener('touchend', e => {
-                const touchEndX = e.changedTouches[0].clientX;
-                const deltaX = touchEndX - touchStartX;
-                if (Math.abs(deltaX) > 50) {
-                    if (isImageView) {
-                        if (tableGuests.length > 0) {
-                            showModal(tableNumber, 'guests');
-                        }
-                    } else {
-                        if (deltaX > 50 && currentNameIndex > 0) {
-                            currentNameIndex--;
-                            updateNameDisplay();
-                        } else if (deltaX < -50 && currentNameIndex < tableGuests.length - 1) {
-                            currentNameIndex++;
-                            updateNameDisplay();
-                        } else if (deltaX < -50 && currentNameIndex === tableGuests.length - 1) {
-                            showModal(tableNumber, 'image');
-                        } else if (deltaX > 50 && currentNameIndex === 0) {
-                            showModal(tableNumber, 'image');
-                        }
-                    }
-                }
-            });
-
-            function updateNameDisplay() {
-                const cards = modalCard.querySelectorAll('.name-card');
-                cards.forEach((card, index) => {
-                    card.classList.toggle('active', index === currentNameIndex);
-                });
-            }
+            document.body.classList.add('modal-open'); // Lock scrolling
         }
 
+        // Function to close the modal
         function closeModal() {
             const modal = document.getElementById('modal');
             modal.classList.add('hidden');
             modal.innerHTML = '';
             currentTable = null;
             isImageView = true;
-            currentNameIndex = 0;
-            document.body.classList.remove('modal-open');
+            document.body.classList.remove('modal-open'); // Restore scrolling
         }
 
+        // Handling search functionality and pill clicks
+        const searchInput = document.getElementById('searchInput');
+        const resultsList = document.getElementById('results');
+        const clearButton = document.querySelector('.clear-button');
+        const imageContainer = document.getElementById('searchImageContainer');
+
         function updateResults(query, guests) {
-            const resultsList = document.getElementById('results');
-            const imageContainer = document.getElementById('searchImageContainer');
             resultsList.innerHTML = '';
-
+            // Hide or show images based on input
             if (query.length === 0) {
-                imageContainer.classList.add('visible');
-                startOrResumeRotation();
-                return;
+                imageContainer.classList.remove('hidden');
+                startOrResumeRotation(); // Resume rotation from last index
+            } else {
+                imageContainer.classList.add('hidden'); // Hide immediately on text input
+                stopImageRotation(); // Stop rotation when text is entered
             }
-
-            imageContainer.classList.remove('visible');
-            stopImageRotation();
-
+            if (query.length === 0) {
+                return; // Don't show any results if input is empty
+            }
             const filteredGuests = guests.filter(guest =>
                 guest.fullName.toLowerCase().includes(query.toLowerCase())
             );
-
+            
             if (filteredGuests.length === 0) {
-                resultsList.innerHTML = `
-                    <div class="px-4 py-1.5 text-[#8cabc0] font-extrabold text-base flex items-center justify-center"
-                         style="background-color: #d9e5f9; white-space: nowrap; width: 280px; height: 32px;">
-                        No matching guests found
-                    </div>`;
+                const div = document.createElement('div');
+                div.className = 'px-4 py-1.5 text-[#8cabc0] font-extrabold text-base flex items-center justify-center';
+                div.style.backgroundColor = '#d9e5f9';
+                div.style.whiteSpace = 'nowrap';
+                div.style.width = '280px';
+                div.style.height = '32px';
+                div.textContent = 'No matching guests found';
+                resultsList.appendChild(div);
                 return;
             }
 
@@ -370,21 +386,45 @@
                 div.style.width = '280px';
                 div.style.height = '32px';
                 div.textContent = guest.display;
-                div.onclick = () => showModal(guest.table);
+                div.onclick = () => showModal(guest.table); // Simplified event handler
                 resultsList.appendChild(div);
             });
         }
 
+        // Load guests and set up search
         loadGuests().then(guests => {
-            document.getElementById('searchInput').addEventListener('input', e => updateResults(e.target.value, guests));
-            document.querySelector('.clear-button').addEventListener('click', () => {
-                document.getElementById('searchInput').value = '';
-                document.getElementById('searchInput').dispatchEvent(new Event('input'));
+            searchInput.addEventListener('input', (e) => {
+                updateResults(e.target.value, guests);
             });
+            // Ensure background loading continues
+            loadMainImages(); // Called here to start preloading
         });
 
-        document.addEventListener('click', e => {
-            if (e.target.classList.contains('modal-overlay')) closeModal();
+        // Clear button functionality
+        clearButton.addEventListener('click', () => {
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input')); // Trigger input event to clear results
+        });
+
+        // Close modal when clicking outside the card
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal-overlay')) {
+                closeModal();
+            }
+        });
+
+        // Swipe event listeners for modal card
+        const modal = document.getElementById('modal');
+        let touchStartX = 0;
+        modal.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+        });
+        modal.addEventListener('touchend', (e) => {
+            const touchEndX = e.changedTouches[0].clientX;
+            const swipeDistance = touchEndX - touchStartX;
+            if (Math.abs(swipeDistance) > 50 && currentTable) { // Minimum swipe distance
+                showModal(currentTable, isImageView ? 'guests' : 'image');
+            }
         });
     </script>
 </body>
