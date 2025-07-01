@@ -162,8 +162,9 @@
         // Function to load main seating images dynamically with preloading
         async function loadMainImages() {
             const container = document.getElementById('searchImageContainer');
-            let firstImage = null;
             const imagePromises = [];
+            let firstImage = null;
+
             for (let i = 1; i <= 10; i++) { // Reasonable limit, adjust if needed
                 const pngUrl = `images/home/${i}.png`;
                 const jpgUrl = `images/home/${i}.jpg`;
@@ -183,8 +184,9 @@
                         const img = new Image();
                         img.src = src;
                         img.alt = `Main seating chart ${i}`;
+                        img.className = 'search-image' + (i === 1 && !firstImage ? ' active' : '');
                         img.onload = () => {
-                            console.log(`Successfully preloaded image: ${src}`);
+                            console.log(`Successfully loaded image: ${src}`);
                             resolve(img);
                         };
                         img.onerror = () => {
@@ -194,43 +196,29 @@
                     });
                 })();
                 imagePromises.push(promise);
-                if (i === 1 && !firstImage) { // Check for first image
-                    const [pngExists, jpgExists] = await Promise.all([
-                        imageExists(pngUrl),
-                        imageExists(jpgUrl)
-                    ]);
-                    if (pngExists || jpgExists) {
-                        firstImage = new Image();
-                        firstImage.src = pngExists ? pngUrl : jpgUrl;
-                        firstImage.className = 'search-image active';
-                        firstImage.alt = `Main seating chart 1`;
-                        firstImage.onload = () => console.log(`First image loaded: ${firstImage.src}`);
-                        firstImage.onerror = () => console.error(`Failed to load first image: ${firstImage.src}`);
-                        container.appendChild(firstImage);
-                    }
-                }
             }
 
             const loadedImages = (await Promise.all(imagePromises)).filter(img => img !== null);
-            console.log(`Total images preloaded: ${loadedImages.length}`);
+            console.log(`Total images loaded: ${loadedImages.length}`);
 
-            if (loadedImages.length === 0 && !firstImage) {
-                console.log('No images available to rotate');
+            if (loadedImages.length === 0) {
+                console.log('No images available to display');
+                container.classList.add('hidden'); // Hide container if no images
                 return;
             }
 
-            // Append remaining preloaded images (skip the first if already added)
+            // Append all images to the container
             loadedImages.forEach((img, index) => {
-                if (index > 0 || !firstImage) { // Skip first if already added
-                    img.className = 'search-image';
-                    container.appendChild(img);
-                }
+                container.appendChild(img);
             });
 
-            // Start rotation only after all images are preloaded
-            if (loadedImages.length > 0) {
+            // Start rotation only after all images are loaded
+            if (loadedImages.length > 1) {
                 const allImages = Array.from(container.querySelectorAll('.search-image'));
                 rotateImages(allImages, 0);
+            } else if (loadedImages.length === 1) {
+                console.log('Only one image loaded, displaying without rotation');
+                loadedImages[0].classList.add('active');
             }
         }
 
@@ -260,6 +248,7 @@
                 rotateImages(Array.from(images), lastRotationIndex); // Resume from last index
             } else {
                 console.log(`Only ${images.length} image loaded, rotation not started`);
+                images[0].classList.add('active'); // Ensure single image is visible
             }
         }
 
@@ -396,8 +385,6 @@
             searchInput.addEventListener('input', (e) => {
                 updateResults(e.target.value, guests);
             });
-            // Ensure background loading continues
-            loadMainImages(); // Called here to start preloading
         });
 
         // Clear button functionality
