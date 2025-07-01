@@ -11,6 +11,7 @@
         body {
             font-family: 'Abel', sans-serif;
             font-weight: 800;
+            background-color: #8cabc0;
         }
         .modal-overlay {
             position: fixed;
@@ -32,11 +33,9 @@
             max-width: 80%;
             max-height: 80%;
             min-width: 300px;
-            min-height: 200px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
         }
         .modal-card img {
             max-width: 100%;
@@ -47,25 +46,6 @@
             color: #d9e5f9;
             font-size: 1.25rem;
             font-weight: 800;
-            text-align: center;
-        }
-        .modal-card h2 {
-            color: #d9e5f9;
-            font-size: 1.5rem;
-            font-weight: 800;
-            margin-bottom: 16px;
-            text-align: center;
-        }
-        .guest-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            max-height: 60vh;
-            overflow-y: auto;
-            width: 280px;
-        }
-        body.modal-open {
-            overflow: hidden;
         }
         .search-container {
             position: relative;
@@ -75,6 +55,10 @@
             position: relative;
             width: 280px;
             margin: 8px auto 0;
+            display: none;
+        }
+        .search-image-container.visible {
+            display: block;
         }
         .search-image {
             position: absolute;
@@ -91,14 +75,10 @@
             opacity: 1;
             z-index: 2;
         }
-        .search-image-container.hidden {
-            display: none;
-        }
         .clear-button {
             position: absolute;
             right: 16px;
             top: 13px;
-            line-height: 1;
             color: #8cabc0;
             font-size: 1rem;
             font-weight: 800;
@@ -110,7 +90,7 @@
         }
     </style>
 </head>
-<body style="background-color: #8cabc0;">
+<body>
     <div class="container mx-auto px-4 py-12">
         <h1 class="text-4xl font-extrabold text-center mb-8" style="color: #d9e5f9;">Please Find Your Seat</h1>
         <div class="max-w-lg mx-auto">
@@ -132,215 +112,129 @@
 
     <script>
         let guestsData = [];
-        let currentTable = null;
-        let isImageView = true;
-        let imageRotationInterval = null;
-        let lastRotationIndex = 0;
-
-        function preloadImages(guests) {
-            const tableNumbers = [...new Set(guests.map(guest => guest.table))];
-            tableNumbers.forEach(table => {
-                const img = new Image();
-                img.src = `images/tables/Table ${table}.png`;
-                img.onerror = () => console.log(`Preload: No image at images/tables/Table ${table}.png`);
-            });
-        }
+        let rotationInterval = null;
 
         async function imageExists(url) {
             try {
                 const response = await fetch(url, { method: 'HEAD' });
                 return response.ok;
-            } catch (error) {
-                console.log(`Image check failed for ${url}: ${error.message}`);
+            } catch {
                 return false;
             }
         }
 
         async function loadMainImages() {
             const container = document.getElementById('searchImageContainer');
-            const imagePromises = [];
-            let loadedImages = [];
+            const loadedImages = [];
 
-            // Load the first image immediately
+            // Load first image immediately
             const loadFirstImage = async () => {
-                const pngUrl = `images/home/1.png`;
-                const jpgUrl = `images/home/1.jpg`;
-                const [pngExists, jpgExists] = await Promise.all([
-                    imageExists(pngUrl),
-                    imageExists(jpgUrl)
-                ]);
-                let src = '';
-                if (pngExists) src = pngUrl;
-                else if (jpgExists) src = jpgUrl;
-                else {
-                    console.log(`No first image found for index 1: ${pngUrl} or ${jpgUrl}`);
-                    return null;
-                }
-
+                const src = (await imageExists('images/home/1.png')) ? 'images/home/1.png' : 
+                            (await imageExists('images/home/1.jpg')) ? 'images/home/1.jpg' : null;
+                if (!src) return null;
                 return new Promise((resolve) => {
                     const img = new Image();
                     img.src = src;
-                    img.alt = `Main seating chart 1`;
+                    img.alt = 'Main seating chart 1';
                     img.className = 'search-image active';
                     img.onload = () => {
-                        console.log(`Successfully loaded first image: ${src}`);
                         container.appendChild(img);
-                        container.classList.remove('hidden');
+                        container.classList.add('visible');
                         resolve(img);
                     };
-                    img.onerror = () => {
-                        console.error(`Failed to load first image: ${src}`);
-                        resolve(null);
-                    };
+                    img.onerror = () => resolve(null);
                 });
             };
 
-            // Load first image and add to loadedImages if successful
             const firstImage = await loadFirstImage();
             if (firstImage) loadedImages.push(firstImage);
 
             // Load remaining images (2 to 10)
+            const imagePromises = [];
             for (let i = 2; i <= 10; i++) {
-                const pngUrl = `images/home/${i}.png`;
-                const jpgUrl = `images/home/${i}.jpg`;
-                const promise = (async () => {
-                    const [pngExists, jpgExists] = await Promise.all([
-                        imageExists(pngUrl),
-                        imageExists(jpgUrl)
-                    ]);
-                    let src = '';
-                    if (pngExists) src = pngUrl;
-                    else if (jpgExists) src = jpgUrl;
-                    else {
-                        console.log(`No image found for index ${i}: ${pngUrl} or ${jpgUrl}`);
-                        return null;
-                    }
+                imagePromises.push((async () => {
+                    const src = (await imageExists(`images/home/${i}.png`)) ? `images/home/${i}.png` : 
+                                (await imageExists(`images/home/${i}.jpg`)) ? `images/home/${i}.jpg` : null;
+                    if (!src) return null;
                     return new Promise((resolve) => {
                         const img = new Image();
                         img.src = src;
                         img.alt = `Main seating chart ${i}`;
                         img.className = 'search-image';
                         img.onload = () => {
-                            console.log(`Successfully loaded image: ${src}`);
                             container.appendChild(img);
                             resolve(img);
                         };
-                        img.onerror = () => {
-                            console.error(`Failed to load image: ${src}`);
-                            resolve(null);
-                        };
+                        img.onerror = () => resolve(null);
                     });
-                })();
-                imagePromises.push(promise);
+                })());
             }
 
-            // Wait for all remaining images to resolve
-            const remainingImages = (await Promise.all(imagePromises)).filter(img => img !== null);
-            loadedImages = loadedImages.concat(remainingImages);
-            console.log(`Total images loaded: ${loadedImages.length}`);
+            const remainingImages = (await Promise.all(imagePromises)).filter(img => img);
+            loadedImages.push(...remainingImages);
 
-            // Hide container if no images loaded
-            if (loadedImages.length === 0) {
-                console.log('No images available to display or rotate');
-                container.classList.add('hidden');
-                return;
-            }
-
-            // Start rotation only if multiple images are loaded and input is empty
-            if (loadedImages.length > 1 && document.getElementById('searchInput').value.length === 0) {
-                startOrResumeRotation();
+            if (loadedImages.length > 1 && !document.getElementById('searchInput').value) {
+                startRotation();
             }
         }
 
-        function rotateImages(images, currentIndex) {
-            const input = document.getElementById('searchInput');
-            if (input.value.length > 0) {
-                stopImageRotation();
-                return;
-            }
-            images.forEach((img, index) => {
-                img.classList.toggle('active', index === currentIndex);
-            });
-            lastRotationIndex = (currentIndex + 1) % images.length;
-            imageRotationInterval = setTimeout(() => {
-                rotateImages(images, lastRotationIndex);
+        function startRotation() {
+            stopRotation();
+            const images = Array.from(document.querySelectorAll('.search-image'));
+            if (images.length <= 1) return;
+            let currentIndex = 0;
+            rotationInterval = setInterval(() => {
+                if (document.getElementById('searchInput').value) {
+                    stopRotation();
+                    return;
+                }
+                images.forEach((img, index) => img.classList.toggle('active', index === currentIndex));
+                currentIndex = (currentIndex + 1) % images.length;
             }, 3000);
         }
 
-        function startOrResumeRotation() {
-            stopImageRotation();
-            const images = Array.from(document.querySelectorAll('.search-image'));
-            if (images.length <= 1) {
-                console.log(`Only ${images.length} image(s) loaded, rotation not started`);
-                if (images.length === 1) images[0].classList.add('active');
-                return;
-            }
-            rotateImages(images, lastRotationIndex);
-        }
-
-        function stopImageRotation() {
-            if (imageRotationInterval) {
-                clearTimeout(imageRotationInterval);
-                imageRotationInterval = null;
+        function stopRotation() {
+            if (rotationInterval) {
+                clearInterval(rotationInterval);
+                rotationInterval = null;
             }
         }
 
         async function loadGuests() {
             try {
                 const response = await fetch('seating-chart.csv');
-                if (!response.ok) {
-                    throw new Error(`Failed to load CSV file: ${response.status} ${response.statusText}`);
-                }
+                if (!response.ok) throw new Error('CSV load failed');
                 const csvText = await response.text();
                 guestsData = Papa.parse(csvText, {
                     header: true,
                     skipEmptyLines: true,
-                    transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
-                }).data.map(row => {
-                    const firstName = row["First Name"] || "";
-                    const lastName = row["Last Name"] || "";
-                    const fullName = `${firstName} ${lastName}`.trim();
-                    return {
-                        fullName,
-                        display: `${fullName} | Table ${row["Table"]}`,
-                        table: row["Table"]
-                    };
-                });
-                preloadImages(guestsData);
+                    transform: (value) => value.trim().replace(/^"|"$/g, '')
+                }).data.map(row => ({
+                    fullName: `${row["First Name"] || ""} ${row["Last Name"] || ""}`.trim(),
+                    display: `${row["First Name"] || ""} ${row["Last Name"] || ""} | Table ${row["Table"]}`,
+                    table: row["Table"]
+                }));
                 await loadMainImages();
                 return guestsData;
-            } catch (error) {
-                console.error('Error loading CSV:', error);
-                const resultsList = document.getElementById('results');
-                resultsList.innerHTML = '<div class="px-4 py-1.5 text-[#8cabc0] font-extrabold text-base flex items-center justify-center" style="background-color: #d9e5f9; white-space: nowrap; width: 280px; height: 32px;">Unable to load guest list. Please check if the seating chart file is available or contact the organizer.</div>';
+            } catch {
+                document.getElementById('results').innerHTML = `
+                    <div class="px-4 py-1.5 text-[#8cabc0] font-extrabold text-base flex items-center justify-center"
+                         style="background-color: #d9e5f9; white-space: nowrap; width: 280px; height: 32px;">
+                        Unable to load guest list
+                    </div>`;
                 return [];
             }
         }
 
-        function showModal(tableNumber, view = 'image') {
-            currentTable = tableNumber;
-            isImageView = view === 'image';
+        function showModal(tableNumber) {
             const modal = document.getElementById('modal');
-            modal.classList.add('hidden');
-            modal.innerHTML = '';
-            modal.innerHTML = isImageView ? `
+            modal.innerHTML = `
                 <div class="modal-card">
                     <div class="loading">Loading image...</div>
-                    <img src="images/tables/Table ${tableNumber}.png" alt="Table ${tableNumber} layout" onload="this.previousElementSibling.remove()" onerror="this.previousElementSibling.textContent='Failed to load image'; console.error('Failed to load image: images/tables/Table ${tableNumber}.png')">
-                </div>
-            ` : `
-                <div class="modal-card">
-                    <h2>Table ${tableNumber}</h2>
-                    <div class="guest-list">
-                        ${guestsData.filter(guest => guest.table === tableNumber)
-                            .map(guest => `
-                                <div class="px-4 py-1.5 rounded-full shadow-sm text-[#8cabc0] text-xl font-extrabold flex items-center justify-center" style="background-color: #d9e5f9; white-space: nowrap; width: 280px; height: 32px;">
-                                    ${guest.fullName}
-                                </div>
-                            `).join('')}
-                    </div>
-                </div>
-            `;
+                    <img src="images/tables/Table ${tableNumber}.png" alt="Table ${tableNumber} layout"
+                         onload="this.previousElementSibling.remove()"
+                         onerror="this.previousElementSibling.textContent='Failed to load image'">
+                </div>`;
             modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
         }
@@ -349,41 +243,31 @@
             const modal = document.getElementById('modal');
             modal.classList.add('hidden');
             modal.innerHTML = '';
-            currentTable = null;
-            isImageView = true;
             document.body.classList.remove('modal-open');
         }
 
-        const searchInput = document.getElementById('searchInput');
-        const resultsList = document.getElementById('results');
-        const clearButton = document.querySelector('.clear-button');
-        const imageContainer = document.getElementById('searchImageContainer');
-
         function updateResults(query, guests) {
+            const resultsList = document.getElementById('results');
+            const imageContainer = document.getElementById('searchImageContainer');
             resultsList.innerHTML = '';
-            if (query.length === 0) {
-                imageContainer.classList.remove('hidden');
-                startOrResumeRotation();
-            } else {
-                imageContainer.classList.add('hidden');
-                stopImageRotation();
-            }
-            if (query.length === 0) {
+            if (!query) {
+                imageContainer.classList.add('visible');
+                startRotation();
                 return;
             }
+            imageContainer.classList.remove('visible');
+            stopRotation();
+
             const filteredGuests = guests.filter(guest =>
                 guest.fullName.toLowerCase().includes(query.toLowerCase())
             );
-            
-            if (filteredGuests.length === 0) {
-                const div = document.createElement('div');
-                div.className = 'px-4 py-1.5 text-[#8cabc0] font-extrabold text-base flex items-center justify-center';
-                div.style.backgroundColor = '#d9e5f9';
-                div.style.whiteSpace = 'nowrap';
-                div.style.width = '280px';
-                div.style.height = '32px';
-                div.textContent = 'No matching guests found';
-                resultsList.appendChild(div);
+
+            if (!filteredGuests.length) {
+                resultsList.innerHTML = `
+                    <div class="px-4 py-1.5 text-[#8cabc0] font-extrabold text-base flex items-center justify-center"
+                         style="background-color: #d9e5f9; white-space: nowrap; width: 280px; height: 32px;">
+                        No matching guests found
+                    </div>`;
                 return;
             }
 
@@ -401,32 +285,15 @@
         }
 
         loadGuests().then(guests => {
-            searchInput.addEventListener('input', (e) => {
-                updateResults(e.target.value, guests);
+            document.getElementById('searchInput').addEventListener('input', e => updateResults(e.target.value, guests));
+            document.querySelector('.clear-button').addEventListener('click', () => {
+                document.getElementById('searchInput').value = '';
+                document.getElementById('searchInput').dispatchEvent(new Event('input'));
             });
         });
 
-        clearButton.addEventListener('click', () => {
-            searchInput.value = '';
-            searchInput.dispatchEvent(new Event('input'));
-        });
-
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal-overlay')) {
-                closeModal();
-            }
-        });
-
-        let touchStartX;
-        document.getElementById('modal').addEventListener('touchstart', (e) => {
-            touchStartX = e.touches[0].clientX;
-        });
-        document.getElementById('modal').addEventListener('touchend', (e) => {
-            const touchEndX = e.changedTouches[0].clientX;
-            const swipeDistance = touchEndX - touchStartX;
-            if (Math.abs(swipeDistance) > 50 && currentTable) {
-                showModal(currentTable, isImageView ? 'guests' : 'image');
-            }
+        document.addEventListener('click', e => {
+            if (e.target.classList.contains('modal-overlay')) closeModal();
         });
     </script>
 </body>
