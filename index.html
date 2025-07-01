@@ -146,17 +146,7 @@
                 img.src = `images/tables/Table ${table}.png`;
                 img.onerror = () => console.log(`Preload: No image at images/tables/Table ${table}.png`);
             });
-            // Preload main seating images
-            let i = 1;
-            while (i <= 10) { // Reasonable limit, adjust if needed
-                const imgPng = new Image();
-                const imgJpg = new Image();
-                imgPng.src = `images/home/${i}.png`;
-                imgJpg.src = `images/home/${i}.jpg`;
-                imgPng.onerror = () => console.log(`Preload: No image at images/home/${i}.png`);
-                imgJpg.onerror = () => console.log(`Preload: No image at images/home/${i}.jpg`);
-                i++;
-            }
+            // Preload main seating images (moved to loadMainImages)
         }
 
         // Function to check if an image exists
@@ -170,54 +160,60 @@
             }
         }
 
-        // Function to load main seating images dynamically
+        // Function to load main seating images dynamically with preloading
         async function loadMainImages() {
             const container = document.getElementById('searchImageContainer');
-            let i = 1;
-            let imagesLoaded = 0;
-            while (i <= 10) { // Reasonable limit, adjust if needed
+            const imagePromises = [];
+            for (let i = 1; i <= 10; i++) { // Reasonable limit, adjust if needed
                 const pngUrl = `images/home/${i}.png`;
                 const jpgUrl = `images/home/${i}.jpg`;
-                let src = '';
-                const [pngExists, jpgExists] = await Promise.all([
-                    imageExists(pngUrl),
-                    imageExists(jpgUrl)
-                ]);
-                if (pngExists) {
-                    src = pngUrl;
-                } else if (jpgExists) {
-                    src = jpgUrl;
-                } else {
-                    console.log(`No image found for index ${i}: ${pngUrl} or ${jpgUrl}`);
-                    i++;
-                    continue;
-                }
-                console.log(`Loading image: ${src}`);
-                const img = document.createElement('img');
-                img.src = src;
-                img.className = 'search-image' + (imagesLoaded === 0 ? ' active' : '');
-                img.alt = `Main seating chart ${i}`;
-                img.onerror = function() {
-                    console.error(`Failed to load image after confirmation: ${this.src}`);
-                    this.style.display = 'none'; // Hide if image fails to load
-                };
-                img.onload = function() {
-                    console.log(`Successfully loaded image: ${this.src}`);
-                    imagesLoaded++;
-                    if (imagesLoaded === 1) {
-                        // Trigger rotation as soon as the first image loads
-                        const images = container.querySelectorAll('.search-image');
-                        if (images.length > 1) {
-                            rotateImages(images, 0); // Start with index 0
-                        } else {
-                            console.log(`Only ${images.length} image loaded, rotation not started`);
-                        }
+                const promise = (async () => {
+                    const [pngExists, jpgExists] = await Promise.all([
+                        imageExists(pngUrl),
+                        imageExists(jpgUrl)
+                    ]);
+                    let src = '';
+                    if (pngExists) src = pngUrl;
+                    else if (jpgExists) src = jpgUrl;
+                    else {
+                        console.log(`No image found for index ${i}: ${pngUrl} or ${jpgUrl}`);
+                        return null;
                     }
-                };
-                container.appendChild(img);
-                i++;
+                    return new Promise((resolve) => {
+                        const img = new Image();
+                        img.src = src;
+                        img.alt = `Main seating chart ${i}`;
+                        img.onload = () => {
+                            console.log(`Successfully preloaded image: ${src}`);
+                            resolve(img);
+                        };
+                        img.onerror = () => {
+                            console.error(`Failed to load image after confirmation: ${src}`);
+                            resolve(null); // Resolve with null for failed images
+                        };
+                    });
+                })();
+                imagePromises.push(promise);
             }
-            console.log(`Total images loaded: ${imagesLoaded}`);
+
+            const loadedImages = (await Promise.all(imagePromises)).filter(img => img !== null);
+            console.log(`Total images preloaded: ${loadedImages.length}`);
+
+            if (loadedImages.length === 0) {
+                console.log('No images available to rotate');
+                return;
+            }
+
+            // Append all preloaded images to container
+            loadedImages.forEach((img, index) => {
+                img.className = 'search-image' + (index === 0 ? ' active' : '');
+                container.appendChild(img);
+            });
+
+            // Start rotation with the first image
+            if (loadedImages.length > 1) {
+                rotateImages(loadedImages, 0);
+            }
         }
 
         // Function to rotate images
@@ -225,15 +221,9 @@
             const input = document.getElementById('searchInput');
             if (input.value.length > 0) return; // Pause rotation if input has text
             images.forEach((img, index) => {
-                if (img.style.display !== 'none') { // Only consider visible images
-                    img.classList.toggle('active', index === currentIndex);
-                }
+                img.classList.toggle('active', index === currentIndex);
             });
             let nextIndex = (currentIndex + 1) % images.length;
-            // Skip hidden images
-            while (images[nextIndex] && images[nextIndex].style.display === 'none') {
-                nextIndex = (nextIndex + 1) % images.length;
-            }
             lastRotationIndex = nextIndex; // Update last rotation index
             // Schedule next rotation
             imageRotationInterval = setTimeout(() => {
@@ -249,7 +239,7 @@
                 return;
             }
             if (images.length > 1) {
-                rotateImages(images, lastRotationIndex); // Resume from last index
+                rotateImages(Array.from(images), lastRotationIndex); // Resume from last index
             } else {
                 console.log(`Only ${images.length} image loaded, rotation not started`);
             }
@@ -285,8 +275,8 @@
                         table: row["Table"]
                     };
                 });
-                preloadImages(guestsData); // Preload images after loading guests
-                await loadMainImages(); // Load main seating images
+                preloadImages(guestsData); // Preload table images
+                await loadMainImages(); // Load and preload main seating images
                 return guestsData;
             } catch (error) {
                 console.error('Error loading CSV:', error);
