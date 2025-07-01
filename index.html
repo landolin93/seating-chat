@@ -13,6 +13,9 @@
             font-weight: 800;
             background-color: #8cabc0;
         }
+        body.modal-open {
+            overflow: hidden;
+        }
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -36,16 +39,51 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            overflow: hidden;
         }
         .modal-card img {
             max-width: 100%;
-            max-height: 100%;
+            max-height: 60%;
             object-fit: contain;
         }
         .modal-card .loading {
             color: #d9e5f9;
             font-size: 1.25rem;
             font-weight: 800;
+        }
+        .table-card {
+            background-color: #d9e5f9;
+            color: #8cabc0;
+            width: 100%;
+            max-width: 280px;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 8px;
+            text-align: center;
+            overflow: hidden;
+            position: relative;
+            touch-action: pan-x;
+        }
+        .table-card h3 {
+            font-size: 1.25rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+        .table-card .name-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 40px;
+            overflow: hidden;
+        }
+        .table-card .name {
+            position: absolute;
+            width: 100%;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .table-card .name.active {
+            opacity: 1;
         }
         .search-container {
             position: relative;
@@ -127,7 +165,6 @@
             const container = document.getElementById('searchImageContainer');
             const loadedImages = [];
 
-            // Load first image immediately
             const loadFirstImage = async () => {
                 const src = (await imageExists('images/home/1.png')) ? 'images/home/1.png' : 
                             (await imageExists('images/home/1.jpg')) ? 'images/home/1.jpg' : null;
@@ -139,7 +176,9 @@
                     img.className = 'search-image active';
                     img.onload = () => {
                         container.appendChild(img);
-                        container.classList.add('visible');
+                        if (!document.getElementById('searchInput').value) {
+                            container.classList.add('visible');
+                        }
                         resolve(img);
                     };
                     img.onerror = () => resolve(null);
@@ -149,7 +188,6 @@
             const firstImage = await loadFirstImage();
             if (firstImage) loadedImages.push(firstImage);
 
-            // Load remaining images (2 to 10)
             const imagePromises = [];
             for (let i = 2; i <= 10; i++) {
                 imagePromises.push((async () => {
@@ -214,7 +252,7 @@
                     display: `${row["First Name"] || ""} ${row["Last Name"] || ""} | Table ${row["Table"]}`,
                     table: row["Table"]
                 }));
-                await loadMainImages();
+                loadMainImages();
                 return guestsData;
             } catch {
                 document.getElementById('results').innerHTML = `
@@ -228,15 +266,58 @@
 
         function showModal(tableNumber) {
             const modal = document.getElementById('modal');
-            modal.innerHTML = `
+            const tableGuests = guestsData
+                .filter(guest => guest.table === tableNumber)
+                .map(guest => guest.fullName);
+            
+            let currentIndex = 0;
+            let touchStartX = 0;
+
+            const modalContent = `
                 <div class="modal-card">
                     <div class="loading">Loading image...</div>
                     <img src="images/tables/Table ${tableNumber}.png" alt="Table ${tableNumber} layout"
                          onload="this.previousElementSibling.remove()"
                          onerror="this.previousElementSibling.textContent='Failed to load image'">
-                </div>`;
+                    <div class="table-card">
+                        <h3>Table ${tableNumber}</h3>
+                        <div class="name-container">
+                            ${tableGuests.map((name, index) => `
+                                <div class="name ${index === 0 ? 'active' : ''}">${name}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            modal.innerHTML = modalContent;
             modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
+
+            const nameContainer = modal.querySelector('.name-container');
+            if (!nameContainer) return;
+
+            function updateNameDisplay() {
+                const names = nameContainer.querySelectorAll('.name');
+                names.forEach((name, index) => {
+                    name.classList.toggle('active', index === currentIndex);
+                });
+            }
+
+            nameContainer.addEventListener('touchstart', e => {
+                touchStartX = e.touches[0].clientX;
+            });
+
+            nameContainer.addEventListener('touchend', e => {
+                const touchEndX = e.changedTouches[0].clientX;
+                const deltaX = touchEndX - touchStartX;
+                if (deltaX > 50 && currentIndex > 0) {
+                    currentIndex--;
+                    updateNameDisplay();
+                } else if (deltaX < -50 && currentIndex < tableGuests.length - 1) {
+                    currentIndex++;
+                    updateNameDisplay();
+                }
+            });
         }
 
         function closeModal() {
@@ -250,11 +331,14 @@
             const resultsList = document.getElementById('results');
             const imageContainer = document.getElementById('searchImageContainer');
             resultsList.innerHTML = '';
+            
             if (!query) {
                 imageContainer.classList.add('visible');
                 startRotation();
+                resultsList.innerHTML = '';
                 return;
             }
+
             imageContainer.classList.remove('visible');
             stopRotation();
 
